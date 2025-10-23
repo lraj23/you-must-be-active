@@ -23,13 +23,14 @@ app.message("", async ({ message }) => {
 	await app.client.chat.postEphemeral({
 		channel: YMBActiveChannelId,
 		user: userId,
-		text: "That message had a length of " + length + ", and " + files + " file(s). Your activity score increased by " + (length + 10 * files) + " points from " + (YMBActive.score[userId] || 0) + " to " + (YMBActive.score[userId] += length + 10 * files)
+		text: "That message had a length of " + length + ", and " + files + " file(s). Your activity score increased by " + (length + 10 * files) + " points from " + YMBActive.score[userId] + " to " + (YMBActive.score[userId] += length + 10 * files)
 	});
 	saveState(YMBActive);
 });
 
 app.command("/ymbactive-join-channel", async interaction => {
 	await interaction.ack();
+	let YMBActive = getYMBActive();
 	const userId = interaction.body.user_id;
 	let joined = false;
 	try {
@@ -45,6 +46,36 @@ app.command("/ymbactive-join-channel", async interaction => {
 		channel: YMBActiveChannelId,
 		text: "<@" + userId + "> has joined <#" + YMBActiveChannelId + ">! Let's see how long they stay..."
 	});
+	YMBActive.score[userId] = 0;
+	saveState(YMBActive);
+});
+
+let isChainRunning = false;
+const scheduleChain = async _ => {
+	await new Promise(resolve => setTimeout(async _ => {
+		let YMBActive = getYMBActive();
+		await app.client.chat.postEphemeral({
+			channel: YMBActiveChannelId,
+			user: lraj23UserId,
+			text: "This is a new message scheduled for an interval, currently 20 seconds. Also, @lraj23 has " + YMBActive.score[lraj23UserId] + " activity score!"
+		});
+		if (isChainRunning) scheduleChain();
+		else await app.client.chat.postEphemeral({
+			channel: YMBActiveChannelId,
+			user: lraj23UserId,
+			text: "The next interval message was canceled..."
+		});
+		resolve(true);
+	}, 20000));
+};
+
+app.command("/ymbactive-start-chain", async interaction => {
+	await interaction.ack();
+	const userId = interaction.body.user_id;
+	if (userId !== lraj23UserId) return await interaction.respond("You aren't permitted to start the chain. Only <@" + lraj23UserId + "> can!");
+	if (isChainRunning) return await interaction.respond("The chain is already running!");
+	scheduleChain();
+	await interaction.respond("The chain has started!");
 });
 
 app.message(/secret button/i, async ({ message: { channel, user, thread_ts, ts } }) => await app.client.chat.postEphemeral({
