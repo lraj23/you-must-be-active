@@ -16,7 +16,6 @@ app.message("", async ({ message }) => {
 	console.log("message in #ymbactive-bot-testing:", message.text);
 	const length = message.text.length;
 	const files = message.files?.length || 0;
-	console.log(message);
 	console.log("message length:", length);
 	console.log("includes file(s):", files);
 	if (YMBActive.score[userId] === undefined) YMBActive.score[userId] = 0;
@@ -74,8 +73,18 @@ app.command("/ymbactive-start-chain", async interaction => {
 	const userId = interaction.body.user_id;
 	if (userId !== lraj23UserId) return await interaction.respond("You aren't permitted to start the chain. Only <@" + lraj23UserId + "> can!");
 	if (isChainRunning) return await interaction.respond("The chain is already running!");
+	isChainRunning = true;
 	scheduleChain();
 	await interaction.respond("The chain has started!");
+});
+
+app.command("/ymbactive-stop-chain", async interaction => {
+	await interaction.ack();
+	const userId = interaction.body.user_id;
+	if (userId !== lraj23UserId) return await interaction.respond("You aren't permitted to stop the chain. Only <@" + lraj23UserId + "> can!");
+	if (!isChainRunning) return await interaction.respond("The chain isn't running!");
+	isChainRunning = false;
+	await interaction.respond("The chain has stopped!");
 });
 
 app.message(/secret button/i, async ({ message: { channel, user, thread_ts, ts } }) => await app.client.chat.postEphemeral({
