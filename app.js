@@ -9,7 +9,24 @@ const lraj23UserId = "U0947SL6AKB";
 const iWillBuryYouAliveInADarkAlleyAndLetTheRatsFeastUponYourCorpse = "i-will-bury-you-alive-in-a-dark-alley-and-let-the-rats-feast-upon-your-corpse";
 const YMBActiveChannelId = "C09MUE0M5GA";
 
-app.message("", async ({ message }) => { });
+app.message("", async ({ message }) => {
+	let YMBActive = getYMBActive();
+	const userId = message.user;
+	if (message.channel !== YMBActiveChannelId) return;
+	console.log("message in #ymbactive-bot-testing:", message.text);
+	const length = message.text.length;
+	const files = message.files?.length || 0;
+	console.log(message);
+	console.log("message length:", length);
+	console.log("includes file(s):", files);
+	if (YMBActive.score[userId] === undefined) YMBActive.score[userId] = 0;
+	await app.client.chat.postEphemeral({
+		channel: YMBActiveChannelId,
+		user: userId,
+		text: "That message had a length of " + length + ", and " + files + " file(s). Your activity score increased by " + (length + 10 * files) + " points from " + (YMBActive.score[userId] || 0) + " to " + (YMBActive.score[userId] += length + 10 * files)
+	});
+	saveState(YMBActive);
+});
 
 app.command("/ymbactive-join-channel", async interaction => {
 	await interaction.ack();
