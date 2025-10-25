@@ -72,11 +72,21 @@ const scheduleChain = async _ => {
 			user: lraj23UserId,
 			text: "The person who fell off this time is <@" + leastScore[0] + ">, who has a score of a measly " + leastScore[1] + "."
 		});
-		await app.client.conversations.kick({
-			token: process.env.YMBACTIVE_USER_TOKEN,
-			channel: YMBActiveChannelId,
-			user: leastScore[0]
-		});
+		try {
+			await app.client.conversations.kick({
+				token: process.env.YMBACTIVE_USER_TOKEN,
+				channel: YMBActiveChannelId,
+				user: leastScore[0]
+			});
+		} catch (e) {
+			if (e.data.error === "cant_kick_self")
+				await app.client.chat.postEphemeral({
+					channel: YMBActiveChannelId,
+					user: lraj23UserId,
+					text: "Since <@" + lraj23UserId + "> was the least active this time, but he can't be kicked out (he runs the channel), he's going to get punished differently. Everyone boo him with @ mentions! Spam this channel with being annoyed at him! Ping him repeatedly!"
+				});
+			else console.error(e.data, e.data.error);
+		}
 		console.log(leastScore[1], YMBActive.score[leastScore[0]]);
 		delete YMBActive.score[leastScore[0]];
 		Object.keys(YMBActive.score).forEach(user => YMBActive.score[user] = 0);
