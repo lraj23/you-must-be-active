@@ -52,18 +52,33 @@ app.command("/ymbactive-join-channel", async interaction => {
 let isChainRunning = false;
 const scheduleChain = async _ => {
 	await new Promise(resolve => setTimeout(async _ => {
-		let YMBActive = getYMBActive();
-		await app.client.chat.postEphemeral({
-			channel: YMBActiveChannelId,
-			user: lraj23UserId,
-			text: "This is a new message scheduled for an interval, currently 20 seconds. Also, @lraj23 has " + YMBActive.score[lraj23UserId] + " activity score!"
-		});
 		if (isChainRunning) scheduleChain();
-		else await app.client.chat.postEphemeral({
+		else return await app.client.chat.postEphemeral({
 			channel: YMBActiveChannelId,
 			user: lraj23UserId,
 			text: "The next interval message was canceled..."
 		});
+		let YMBActive = getYMBActive();
+		const leastScore = Object.entries(YMBActive.score).sort((a, b) => a[1] - b[1])[0];
+		console.log(Object.entries(YMBActive.score).sort((a, b) => a[1] - b[1])[0]);
+		try {
+			await app.client.chat.postEphemeral({
+				channel: YMBActiveChannelId,
+				user: lraj23UserId,
+				text: "The person who fell off this time is <@" + leastScore[0] + ">, who has a score of a measly " + leastScore[1] + "."
+			});
+		} catch (e) {
+			console.error(e.data, e.data.error);
+		}
+		await app.client.conversations.kick({
+			token: process.env.YMBACTIVE_USER_TOKEN,
+			channel: YMBActiveChannelId,
+			user: leastScore[0]
+		});
+		console.log(leastScore[1], YMBActive.score[leastScore[0]]);
+		delete YMBActive.score[leastScore[0]];
+		console.log(YMBActive.score);
+		saveState(YMBActive);
 		resolve(true);
 	}, 20000));
 };
