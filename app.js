@@ -192,6 +192,8 @@ app.command("/ymbactive-stop-chain", async ({ ack, body: { user_id }, respond })
 	await respond("The chain has stopped!");
 });
 
+app.command("/ymbactive-leaderboard", async ({ ack, respond }) => [await ack(), await respond("This is the <#" + YMBActiveChannelId + "> Leaderboard!\n\n" + Object.entries(getYMBActive().score).sort((a, b) => b[1] - a[1]).map(user => "<@" + user[0] + "> has " + user[1] + " score!").join("\n"))]);
+
 app.message(/secret button/i, async ({ message: { channel, user, thread_ts, ts } }) => await app.client.chat.postEphemeral({
 	channel, user,
 	blocks: [
