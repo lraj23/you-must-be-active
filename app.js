@@ -19,11 +19,17 @@ app.message("", async ({ message }) => {
 	console.log("message length:", length);
 	console.log("includes file(s):", files);
 	if (YMBActive.score[userId] === undefined) YMBActive.score[userId] = 0;
-	await app.client.chat.postEphemeral({
-		channel: YMBActiveChannelId,
-		user: userId,
-		text: "That message had a length of " + length + ", and " + files + " file(s). Your activity score increased by " + (length + 10 * files) + " points from " + YMBActive.score[userId] + " to " + (YMBActive.score[userId] += length + 10 * files)
-	});
+	try {
+		await app.client.chat.postEphemeral({
+			channel: YMBActiveChannelId,
+			user: userId,
+			text: "That message had a length of " + length + ", and " + files + " file(s). Your activity score increased by " + (length + 10 * files) + " points from " + YMBActive.score[userId] + " to " + (YMBActive.score[userId] += length + 10 * files)
+		});
+	} catch (e) {
+		if (e.data.error === "user_not_in_channel")
+			YMBActive.score[userId] = 0;
+		else console.error(e.data, e.data.error);
+	}
 	saveState(YMBActive);
 });
 
@@ -61,15 +67,11 @@ const scheduleChain = async _ => {
 		let YMBActive = getYMBActive();
 		const leastScore = Object.entries(YMBActive.score).sort((a, b) => a[1] - b[1])[0];
 		console.log(Object.entries(YMBActive.score).sort((a, b) => a[1] - b[1])[0]);
-		try {
-			await app.client.chat.postEphemeral({
-				channel: YMBActiveChannelId,
-				user: lraj23UserId,
-				text: "The person who fell off this time is <@" + leastScore[0] + ">, who has a score of a measly " + leastScore[1] + "."
-			});
-		} catch (e) {
-			console.error(e.data, e.data.error);
-		}
+		await app.client.chat.postEphemeral({
+			channel: YMBActiveChannelId,
+			user: lraj23UserId,
+			text: "The person who fell off this time is <@" + leastScore[0] + ">, who has a score of a measly " + leastScore[1] + "."
+		});
 		await app.client.conversations.kick({
 			token: process.env.YMBACTIVE_USER_TOKEN,
 			channel: YMBActiveChannelId,
@@ -77,10 +79,16 @@ const scheduleChain = async _ => {
 		});
 		console.log(leastScore[1], YMBActive.score[leastScore[0]]);
 		delete YMBActive.score[leastScore[0]];
+		Object.keys(YMBActive.score).forEach(user => YMBActive.score[user] = 0);
+		await app.client.chat.postEphemeral({
+			channel: YMBActiveChannelId,
+			user: lraj23UserId,
+			text: "Reset everyone's score to 0. Make sure not to fall off!"
+		})
 		console.log(YMBActive.score);
 		saveState(YMBActive);
 		resolve(true);
-	}, 20000));
+	}, 1000 * 20));
 };
 
 app.command("/ymbactive-start-chain", async interaction => {
