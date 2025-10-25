@@ -7,13 +7,13 @@ const headers = {
 const lraj23BotTestingId = "C09GR27104V";
 const lraj23UserId = "U0947SL6AKB";
 const iWillBuryYouAliveInADarkAlleyAndLetTheRatsFeastUponYourCorpse = "i-will-bury-you-alive-in-a-dark-alley-and-let-the-rats-feast-upon-your-corpse";
-const YMBActiveChannelId = "C09MUE0M5GA";
+const YMBActiveChannelId = "C09MT69QZMX";
 
 app.message("", async ({ message }) => {
 	let YMBActive = getYMBActive();
 	const userId = message.user;
 	if (message.channel !== YMBActiveChannelId) return;
-	console.log("message in #ymbactive-bot-testing:", message.text);
+	console.log("message in #you-must-be-active:", message.text);
 	const length = message.text.length;
 	const files = message.files?.length || 0;
 	console.log("message length:", length);
@@ -37,6 +37,9 @@ app.command("/ymbactive-join-channel", async interaction => {
 	await interaction.ack();
 	let YMBActive = getYMBActive();
 	const userId = interaction.body.user_id;
+	if ((YMBActive.cyclesSinceKicked[userId] !== undefined) && (YMBActive.cyclesSinceKicked[userId] < 2)) {
+		return await interaction.respond("You were just kicked from <#" + YMBActiveChannelId + "> (you-must-be-active) only " + YMBActive.cyclesSinceKicked[userId] + " kicks ago! Wait for some time before trying to join.");
+	}
 	let joined = false;
 	try {
 		await app.client.conversations.invite({
@@ -49,9 +52,9 @@ app.command("/ymbactive-join-channel", async interaction => {
 	}
 	if (joined) await app.client.chat.postMessage({
 		channel: YMBActiveChannelId,
-		text: "<@" + userId + "> has joined <#" + YMBActiveChannelId + ">! Let's see how long they stay..."
+		text: "<@" + userId + "> has joined <#" + YMBActiveChannelId + ">! Let's see how long it takes for them to FALL off..."
 	});
-	YMBActive.score[userId] = 0;
+	YMBActive.score[userId] = YMBActive.cyclesSinceKicked[userId] = 0;
 	saveState(YMBActive);
 });
 
@@ -59,7 +62,7 @@ let isChainRunning = false;
 const scheduleChain = async _ => {
 	await new Promise(resolve => setTimeout(async _ => {
 		if (isChainRunning) scheduleChain();
-		else return await app.client.chat.postEphemeral({
+		else return await app.client.chat.postMessage({
 			channel: YMBActiveChannelId,
 			user: lraj23UserId,
 			text: "The next interval message was canceled..."
@@ -67,10 +70,10 @@ const scheduleChain = async _ => {
 		let YMBActive = getYMBActive();
 		const leastScore = Object.entries(YMBActive.score).sort((a, b) => a[1] - b[1])[0];
 		console.log(Object.entries(YMBActive.score).sort((a, b) => a[1] - b[1])[0]);
-		await app.client.chat.postEphemeral({
+		await app.client.chat.postMessage({
 			channel: YMBActiveChannelId,
 			user: lraj23UserId,
-			text: "The person who fell off this time is <@" + leastScore[0] + ">, who has a score of a measly " + leastScore[1] + "."
+			text: "The person who FELL off this time is <@" + leastScore[0] + ">, who has a score of a measly " + leastScore[1] + "."
 		});
 		try {
 			await app.client.conversations.kick({
@@ -80,21 +83,26 @@ const scheduleChain = async _ => {
 			});
 		} catch (e) {
 			if (e.data.error === "cant_kick_self")
-				await app.client.chat.postEphemeral({
+				await app.client.chat.postMessage({
 					channel: YMBActiveChannelId,
 					user: lraj23UserId,
-					text: "Since <@" + lraj23UserId + "> was the least active this time, but he can't be kicked out (he runs the channel), he's going to get punished differently. Everyone boo him with @ mentions! Spam this channel with being annoyed at him! Ping him repeatedly!"
+					text: "Since <@" + lraj23UserId + "> was the least active this time, but since he can't be kicked out (he runs the channel), he's going to get punished differently. Everyone boo him with @ mentions! Spam this channel with being annoyed at him! Ping him repeatedly!"
 				});
 			else console.error(e.data, e.data.error);
 		}
 		console.log(leastScore[1], YMBActive.score[leastScore[0]]);
+		Object.keys(YMBActive.score).forEach(user => {
+			YMBActive.score[user] = 0;
+			if (!YMBActive.cyclesSinceKicked[user]) YMBActive.cyclesSinceKicked[user] = 0;
+			YMBActive.cyclesSinceKicked[user]++;
+		});
 		delete YMBActive.score[leastScore[0]];
-		Object.keys(YMBActive.score).forEach(user => YMBActive.score[user] = 0);
-		await app.client.chat.postEphemeral({
+		YMBActive.cyclesSinceKicked[leastScore[0]] = 0;
+		await app.client.chat.postMessage({
 			channel: YMBActiveChannelId,
 			user: lraj23UserId,
-			text: "Reset everyone's score to 0. Make sure not to fall off!"
-		})
+			text: "Everyone's score has been reset to 0. Make sure not to FALL off next!"
+		});
 		console.log(YMBActive.score);
 		saveState(YMBActive);
 		resolve(true);
