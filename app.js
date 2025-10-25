@@ -4,19 +4,19 @@ const lraj23UserId = "U0947SL6AKB";
 const YMBActiveTestingChannelId = "C09MUE0M5GA";
 const YMBActiveChannelId = "C09MT69QZMX";
 
-app.message("", async ({ message: { user, channel, text: { length }, files } }) => {
+app.message("", async ({ message: { user, channel, text, files } }) => {
 	let YMBActive = getYMBActive();
 	if (channel !== YMBActiveChannelId) return;
 	console.log("message in #you-must-be-active:", text);
 	const numOfFiles = files?.length || 0;
-	console.log("message length:", length);
+	console.log("message length:", text.length);
 	console.log("includes file(s):", numOfFiles);
 	if (YMBActive.score[user] === undefined) YMBActive.score[user] = 0;
 	try {
 		await app.client.chat.postEphemeral({
 			channel: YMBActiveChannelId,
 			user: user,
-			text: "That message had a length of " + length + ", and " + numOfFiles + " file(s). Your activity score increased by " + (length + 10 * numOfFiles) + " points from " + YMBActive.score[user] + " to " + (YMBActive.score[user] += length + 10 * numOfFiles)
+			text: "That message had a length of " + text.length + ", and " + numOfFiles + " file(s). Your activity score increased by " + (text.length + 10 * numOfFiles) + " points from " + YMBActive.score[user] + " to " + (YMBActive.score[user] += text.length + 10 * numOfFiles)
 		});
 	} catch ({ data }) {
 		if (data.error === "user_not_in_channel")
@@ -69,9 +69,9 @@ app.command("/ymbactive-join-testing", async ({ ack, body: { user_id } }) => {
 });
 
 let isChainRunning = false;
-const scheduleChain = async _ => {
+const scheduleChain = async interval => {
 	await new Promise(resolve => setTimeout(async _ => {
-		if (isChainRunning) scheduleChain();
+		if (isChainRunning) scheduleChain(interval);
 		else return await app.client.chat.postMessage({
 			channel: YMBActiveChannelId,
 			user: lraj23UserId,
@@ -116,15 +116,71 @@ const scheduleChain = async _ => {
 		console.log(YMBActive.score);
 		saveState(YMBActive);
 		resolve(true);
-	}, 1000 * 20));
+	}, 1000 * 60 * interval));
 };
 
 app.command("/ymbactive-start-chain", async ({ ack, body: { user_id }, respond }) => {
 	await ack();
 	if (user_id !== lraj23UserId) return await respond("You aren't permitted to start the chain. Only <@" + lraj23UserId + "> can!");
 	if (isChainRunning) return await respond("The chain is already running!");
+	await respond({
+		blocks: [
+			{
+				type: "input",
+				element: {
+					type: "plain_text_input",
+					action_id: "ignore-interval-length",
+					placeholder: {
+						type: "plain_text",
+						text: "In minutes"
+					}
+				},
+				label: {
+					type: "plain_text",
+					text: "Interval (in minutes)",
+					emoji: true
+				}
+			},
+			{
+				type: "actions",
+				elements: [
+					{
+						type: "button",
+						text: {
+							type: "plain_text",
+							text: ":x: Cancel",
+							emoji: true
+						},
+						value: "cancel",
+						action_id: "cancel"
+					},
+					{
+						type: "button",
+						text: {
+							type: "plain_text",
+							text: ":white_check_mark: Go!",
+							emoji: true
+						},
+						value: "confirm",
+						action_id: "confirm"
+					}
+				]
+			}
+		],
+		text: "Enter the chain interval (min)"
+	});
+});
+
+app.action(/^ignore-.+$/, async ({ ack }) => await ack());
+
+app.action("cancel", async ({ ack, respond }) => [await ack(), await respond({ delete_original: true })]);
+
+app.action("confirm", async ({ ack, respond, body: { state: { values } } }) => {
+	await ack();
+	console.log(values);
+	const interval = parseFloat(values[Object.keys(values)[0]]["ignore-interval-length"].value);
 	isChainRunning = true;
-	scheduleChain();
+	scheduleChain(interval);
 	await respond("The chain has started!");
 });
 
