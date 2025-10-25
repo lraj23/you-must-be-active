@@ -7,6 +7,7 @@ const headers = {
 const lraj23BotTestingId = "C09GR27104V";
 const lraj23UserId = "U0947SL6AKB";
 const iWillBuryYouAliveInADarkAlleyAndLetTheRatsFeastUponYourCorpse = "i-will-bury-you-alive-in-a-dark-alley-and-let-the-rats-feast-upon-your-corpse";
+const YMBActiveTestingChannelId = "C09MUE0M5GA";
 const YMBActiveChannelId = "C09MT69QZMX";
 
 app.message("", async ({ message }) => {
@@ -44,7 +45,7 @@ app.command("/ymbactive-join-channel", async interaction => {
 	try {
 		await app.client.conversations.invite({
 			channel: YMBActiveChannelId,
-			users: interaction.body.user_id
+			users: userId
 		});
 		joined = true;
 	} catch (e) {
@@ -54,8 +55,27 @@ app.command("/ymbactive-join-channel", async interaction => {
 		channel: YMBActiveChannelId,
 		text: "<@" + userId + "> has joined <#" + YMBActiveChannelId + ">! Let's see how long it takes for them to FALL off..."
 	});
-	YMBActive.score[userId] = YMBActive.cyclesSinceKicked[userId] = 0;
+	YMBActive.score[userId] = YMBActive.cyclesSinceKicked[userId] = 1000;
 	saveState(YMBActive);
+});
+
+app.command("/ymbactive-join-testing", async interaction => {
+	await interaction.ack();
+	const userId = interaction.body.user_id;
+	let joined = false;
+	try {
+		await app.client.conversations.invite({
+			channel: YMBActiveTestingChannelId,
+			users: userId
+		});
+		joined = true;
+	} catch (e) {
+		console.error(e.data.error);
+	}
+	if (joined) await app.client.chat.postMessage({
+		channel: YMBActiveTestingChannelId,
+		text: "<@" + userId + "> has joined <#" + YMBActiveTestingChannelId + ">! Hopefully they can help <@" + lraj23UserId + "> test..."
+	});
 });
 
 let isChainRunning = false;
