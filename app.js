@@ -1,51 +1,42 @@
 import app from "./client.js";
-import { getYMBActive, logInteraction, saveState } from "./datahandler.js";
-const aiApiUrl = "https://ai.hackclub.com/chat/completions";
-const headers = {
-	"Content-Type": "application/json"
-};
-const lraj23BotTestingId = "C09GR27104V";
+import { getYMBActive, saveState } from "./datahandler.js";
 const lraj23UserId = "U0947SL6AKB";
-const iWillBuryYouAliveInADarkAlleyAndLetTheRatsFeastUponYourCorpse = "i-will-bury-you-alive-in-a-dark-alley-and-let-the-rats-feast-upon-your-corpse";
 const YMBActiveTestingChannelId = "C09MUE0M5GA";
 const YMBActiveChannelId = "C09MT69QZMX";
 
-app.message("", async ({ message }) => {
+app.message("", async ({ message: { user, channel, text: { length }, files } }) => {
 	let YMBActive = getYMBActive();
-	const userId = message.user;
-	if (message.channel !== YMBActiveChannelId) return;
-	console.log("message in #you-must-be-active:", message.text);
-	const length = message.text.length;
-	const files = message.files?.length || 0;
+	if (channel !== YMBActiveChannelId) return;
+	console.log("message in #you-must-be-active:", text);
+	const numOfFiles = files?.length || 0;
 	console.log("message length:", length);
-	console.log("includes file(s):", files);
-	if (YMBActive.score[userId] === undefined) YMBActive.score[userId] = 0;
+	console.log("includes file(s):", numOfFiles);
+	if (YMBActive.score[user] === undefined) YMBActive.score[user] = 0;
 	try {
 		await app.client.chat.postEphemeral({
 			channel: YMBActiveChannelId,
-			user: userId,
-			text: "That message had a length of " + length + ", and " + files + " file(s). Your activity score increased by " + (length + 10 * files) + " points from " + YMBActive.score[userId] + " to " + (YMBActive.score[userId] += length + 10 * files)
+			user: user,
+			text: "That message had a length of " + length + ", and " + numOfFiles + " file(s). Your activity score increased by " + (length + 10 * numOfFiles) + " points from " + YMBActive.score[user] + " to " + (YMBActive.score[user] += length + 10 * numOfFiles)
 		});
-	} catch (e) {
-		if (e.data.error === "user_not_in_channel")
-			YMBActive.score[userId] = 0;
-		else console.error(e.data, e.data.error);
+	} catch ({ data }) {
+		if (data.error === "user_not_in_channel")
+			YMBActive.score[user] = 0;
+		else console.error(data, data.error);
 	}
 	saveState(YMBActive);
 });
 
-app.command("/ymbactive-join-channel", async interaction => {
-	await interaction.ack();
+app.command("/ymbactive-join-channel", async ({ ack, body: { user_id }, respond }) => {
+	await ack();
 	let YMBActive = getYMBActive();
-	const userId = interaction.body.user_id;
-	if ((YMBActive.cyclesSinceKicked[userId] !== undefined) && (YMBActive.cyclesSinceKicked[userId] < 2)) {
-		return await interaction.respond("You were just kicked from <#" + YMBActiveChannelId + "> (you-must-be-active) only " + YMBActive.cyclesSinceKicked[userId] + " kicks ago! Wait for some time before trying to join.");
+	if ((YMBActive.cyclesSinceKicked[user_id] !== undefined) && (YMBActive.cyclesSinceKicked[user_id] < 2)) {
+		return await respond("You were just kicked from <#" + YMBActiveChannelId + "> (you-must-be-active) only " + YMBActive.cyclesSinceKicked[user_id] + " kicks ago! Wait for some time before trying to join.");
 	}
 	let joined = false;
 	try {
 		await app.client.conversations.invite({
 			channel: YMBActiveChannelId,
-			users: userId
+			users: user_id
 		});
 		joined = true;
 	} catch (e) {
@@ -53,20 +44,19 @@ app.command("/ymbactive-join-channel", async interaction => {
 	}
 	if (joined) await app.client.chat.postMessage({
 		channel: YMBActiveChannelId,
-		text: "<@" + userId + "> has joined <#" + YMBActiveChannelId + ">! Let's see how long it takes for them to FALL off..."
+		text: "<@" + user_id + "> has joined <#" + YMBActiveChannelId + ">! Let's see how long it takes for them to FALL off..."
 	});
-	YMBActive.score[userId] = YMBActive.cyclesSinceKicked[userId] = 1000;
+	YMBActive.score[user_id] = YMBActive.cyclesSinceKicked[user_id] = 1000;
 	saveState(YMBActive);
 });
 
-app.command("/ymbactive-join-testing", async interaction => {
-	await interaction.ack();
-	const userId = interaction.body.user_id;
+app.command("/ymbactive-join-testing", async ({ ack, body: { user_id } }) => {
+	await ack();
 	let joined = false;
 	try {
 		await app.client.conversations.invite({
 			channel: YMBActiveTestingChannelId,
-			users: userId
+			users: user_id
 		});
 		joined = true;
 	} catch (e) {
@@ -74,7 +64,7 @@ app.command("/ymbactive-join-testing", async interaction => {
 	}
 	if (joined) await app.client.chat.postMessage({
 		channel: YMBActiveTestingChannelId,
-		text: "<@" + userId + "> has joined <#" + YMBActiveTestingChannelId + ">! Hopefully they can help <@" + lraj23UserId + "> test..."
+		text: "<@" + user_id + "> has joined <#" + YMBActiveTestingChannelId + ">! Hopefully they can help <@" + lraj23UserId + "> test..."
 	});
 });
 
@@ -129,23 +119,21 @@ const scheduleChain = async _ => {
 	}, 1000 * 20));
 };
 
-app.command("/ymbactive-start-chain", async interaction => {
-	await interaction.ack();
-	const userId = interaction.body.user_id;
-	if (userId !== lraj23UserId) return await interaction.respond("You aren't permitted to start the chain. Only <@" + lraj23UserId + "> can!");
-	if (isChainRunning) return await interaction.respond("The chain is already running!");
+app.command("/ymbactive-start-chain", async ({ ack, body: { user_id }, respond }) => {
+	await ack();
+	if (user_id !== lraj23UserId) return await respond("You aren't permitted to start the chain. Only <@" + lraj23UserId + "> can!");
+	if (isChainRunning) return await respond("The chain is already running!");
 	isChainRunning = true;
 	scheduleChain();
-	await interaction.respond("The chain has started!");
+	await respond("The chain has started!");
 });
 
-app.command("/ymbactive-stop-chain", async interaction => {
-	await interaction.ack();
-	const userId = interaction.body.user_id;
-	if (userId !== lraj23UserId) return await interaction.respond("You aren't permitted to stop the chain. Only <@" + lraj23UserId + "> can!");
-	if (!isChainRunning) return await interaction.respond("The chain isn't running!");
+app.command("/ymbactive-stop-chain", async ({ ack, body: { user_id }, respond }) => {
+	await ack();
+	if (user_id !== lraj23UserId) return await respond("You aren't permitted to stop the chain. Only <@" + lraj23UserId + "> can!");
+	if (!isChainRunning) return await respond("The chain isn't running!");
 	isChainRunning = false;
-	await interaction.respond("The chain has stopped!");
+	await respond("The chain has stopped!");
 });
 
 app.message(/secret button/i, async ({ message: { channel, user, thread_ts, ts } }) => await app.client.chat.postEphemeral({
