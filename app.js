@@ -6,23 +6,28 @@ const YMBActiveChannelId = "C09MT69QZMX";
 
 app.message("", async ({ message: { user, channel, text, files } }) => {
 	let YMBActive = getYMBActive();
-	if (channel !== YMBActiveChannelId) return;
-	console.log("message in #you-must-be-active:", text);
+	if (![YMBActiveChannelId, YMBActiveTestingChannelId].includes(channel)) return;
+	console.log("message in <#" + channel + ">:", text);
 	const numOfFiles = files?.length || 0;
 	console.log("message length:", text.length);
 	console.log("includes file(s):", numOfFiles);
-	if (YMBActive.score[user] === undefined) YMBActive.score[user] = 0;
-	try {
-		await app.client.chat.postEphemeral({
-			channel: YMBActiveChannelId,
-			user: user,
-			text: "That message had a length of " + text.length + ", and " + numOfFiles + " file(s). Your activity score increased by " + (text.length + 10 * numOfFiles) + " points from " + YMBActive.score[user] + " to " + (YMBActive.score[user] += text.length + 10 * numOfFiles)
-		});
-	} catch ({ data }) {
-		if (data.error === "user_not_in_channel")
-			YMBActive.score[user] = 0;
-		else console.error(data, data.error);
-	}
+	let score = YMBActive.score[user];
+	if (score === undefined) score = 0;
+	let newScore = score + text.length + 10 * numOfFiles;
+	console.log(Math.floor(score / YMBActive.updates[user]), Math.floor(newScore / YMBActive.updates[user]));
+	if (Math.floor(score / YMBActive.updates[user]) !== Math.floor(newScore / YMBActive.updates[user]))
+		try {
+			await app.client.chat.postEphemeral({
+				channel: channel,
+				user: user,
+				text: "That message had a length of " + text.length + ", and " + numOfFiles + " file(s). Your activity score increased by " + (newScore - score) + " points from " + score + " to " + (newScore) + ". To change how often you want to get this message, run /ymbactive-edit-remind"
+			});
+		} catch ({ data }) {
+			if (data.error === "user_not_in_channel")
+				score = 0;
+			else console.error(data, data.error);
+		}
+	YMBActive.score[user] = newScore;
 	saveState(YMBActive);
 });
 
@@ -46,7 +51,9 @@ app.command("/ymbactive-join-channel", async ({ ack, body: { user_id }, respond 
 		channel: YMBActiveChannelId,
 		text: "<@" + user_id + "> has joined <#" + YMBActiveChannelId + ">! Let's see how long it takes for them to FALL off..."
 	});
-	YMBActive.score[user_id] = YMBActive.cyclesSinceKicked[user_id] = 1000;
+	YMBActive.score[user_id] = 0;
+	YMBActive.cyclesSinceKicked[user_id] = 1000;
+	YMBActive.update[user_id] = 1;
 	saveState(YMBActive);
 });
 
@@ -190,6 +197,110 @@ app.command("/ymbactive-stop-chain", async ({ ack, body: { user_id }, respond })
 	if (!isChainRunning) return await respond("The chain isn't running!");
 	isChainRunning = false;
 	await respond("The chain has stopped!");
+});
+
+app.command("/ymbactive-edit-remind", async ({ ack, payload: { user_id }, respond }) => {
+	await ack();
+	let YMBActive = getYMBActive();
+	const optInLevels = Object.entries({
+		none: "Never",
+		thousand: "Every 1000",
+		hundred: "Every 100",
+		always: "Every message!"
+	});
+	const currentRemind = { "0": "none", "1000": "thousand", "100": "hundred", "1": "always" }[YMBActive.updates[user_id]];
+	await respond({
+		text: "Choose how often you want to get info on your score update",
+		blocks: [
+			{
+				type: "section",
+				text: {
+					type: "mrkdwn",
+					text: "Choose how often you want to get info on your score update"
+				},
+				accessory: {
+					type: "static_select",
+					placeholder: {
+						type: "plain_text",
+						text: "Required",
+						emoji: true
+					},
+					options: optInLevels.map(level => ({
+						text: {
+							type: "plain_text",
+							text: level[1],
+							emoji: true
+						},
+						value: level[0]
+					})),
+					initial_option: {
+						text: {
+							type: "plain_text",
+							text: Object.fromEntries(optInLevels)[currentRemind],
+							emoji: true
+						},
+						value: currentRemind
+					},
+					action_id: "ignore-remind-interval"
+				}
+			},
+			{
+				type: "actions",
+				elements: [
+					{
+						type: "button",
+						text: {
+							type: "plain_text",
+							text: ":x: Cancel",
+							emoji: true
+						},
+						value: "cancel",
+						action_id: "cancel"
+					},
+					{
+						type: "button",
+						text: {
+							type: "plain_text",
+							text: ":white_check_mark: Go!",
+							emoji: true
+						},
+						value: "confirm",
+						action_id: "confirm-edit-remind"
+					}
+				]
+			}
+		]
+	});
+});
+
+app.action("confirm-edit-remind", async interaction => {
+	await interaction.ack();
+	let YMBActive = getYMBActive();
+	const userId = interaction.body.user.id;
+	console.log(interaction.body.state.values);
+	let remind = interaction.body.state.values[Object.keys(interaction.body.state.values)[0]]["ignore-remind-interval"].selected_option.value || "never";
+	console.log(remind);
+
+	switch (remind) {
+		case "none":
+			await interaction.respond("<@" + userId + "> set their updates to never. The bot will no longer update you with your score. If you want to check your score, run /ymbactive-leaderboard to make sure you aren't about to FALL off.");
+			YMBActive.updates[userId] = 0;
+			break;
+		case "thousand":
+			await interaction.respond("<@" + userId + "> set their updates to every thousand. Every time you send a message that brings your score into a different thousand, you will get a notice. I'd still suggest running /ymbactive-leaderboard to make sure you don't FALL off next!");
+			YMBActive.updates[userId] = 1000;
+			break;
+		case "hundred":
+			await interaction.respond("<@" + userId + "> set their updates to every hundred. Every time you send a message that brings your score into a different hundred, you will get a notice. I'd still suggest running /ymbactive-leaderboard to make sure you don't FALL off next!");
+			YMBActive.updates[userId] = 100;
+			break;
+		case "always":
+			await interaction.respond("<@" + userId + "> set their updates to every message. Every _single_ time you send a message (in this channel), the bot will give you a notice of your score change. Run /ymbactive-leaderboard sometimes, though, just to ensure you aren't FALLing off next.");
+			YMBActive.updates[userId] = 1;
+			break;
+	}
+
+	saveState(YMBActive);
 });
 
 app.command("/ymbactive-leaderboard", async ({ ack, respond }) => [await ack(), await respond("This is the <#" + YMBActiveChannelId + "> Leaderboard!\n\n" + Object.entries(getYMBActive().score).sort((a, b) => b[1] - a[1]).map(user => "<@" + user[0] + "> has " + user[1] + " score!").join("\n"))]);
