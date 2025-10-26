@@ -10,7 +10,7 @@ This is actually pretty simple. Every character in messages sent in the channel 
 
 ### Commands
 
-Since this bot runs a private channel, you can't just *join* the channel. There are also some other commands used for some other ways.
+Since this bot runs a private channel, you can't just *join* the channel. There are also some other commands used for some other purposes.
 
 #### /ymbactive-join-channel
 This is the first command anyone'll run to get associated with this channel. This command adds the user to #you-must-be-active if they weren't already in it. If the user was just recently kicked from the channel, this command will tell them such and not allow them to join.
@@ -36,3 +36,9 @@ This command helps you navigate this bot. It basically redirects you to this rep
 ### Links, Channels, etc.
 
 The dedicated channel for testing this bot is [#ymbactive-bot-testing](https://hackclub.slack.com/archives/C09MT69QZMX), which you can join by running /ymbactive-join-testing. The GitHub repo is literally [right here](https://www.github.com/lraj23/you-must-be-active). My Hackatime project for this bot is called you-must-be-active.
+
+### Explanation of Theme (Fall)
+
+This project doesn't really make it super obvious how the theme is followed. Because of this, I have included this short explanation in the README!
+
+When people join #you-must-be-active, they get a score (which defaults to 37 when joining). Then, every given interval, someone **FALLS** off. (Explanation of this: bro fell off, which applies here because they were popular/active (probably) but aren't anymore.) Also, since they get kicked out of the channel, they are metaphorically **FALL**ing out of the channel. I guess instead of interpreting *fall* the word as autumn, I'm interpreting it as part of the expression *fall off*; and with a metaphorically falling object.
