@@ -243,7 +243,97 @@ app.command("/ymbactive-admin", async ({ ack, body: { user_id }, respond }) => {
 	});
 });
 
-app.action("add-admin", async ({ ack }) => await interaction.ack());
+app.action("add-admin", async ({ ack, respond }) => {
+	await ack();
+	await respond({
+		text: "Choose someone to make admin:",
+		blocks: [
+			{
+				type: "section",
+				text: {
+					type: "mrkdwn",
+					text: "Choose someone to make admin:"
+				},
+				accessory: {
+					type: "users_select",
+					placeholder: {
+						type: "plain_text",
+						text: "Choose someone",
+						emoji: true
+					},
+					action_id: "ignore-add-admin"
+				}
+			},
+			{
+				type: "actions",
+				elements: [
+					{
+						type: "button",
+						text: {
+							type: "plain_text",
+							text: ":x: Cancel",
+							emoji: true
+						},
+						value: "cancel",
+						action_id: "cancel"
+					},
+					{
+						type: "button",
+						text: {
+							type: "plain_text",
+							text: ":white_check_mark: Go!",
+							emoji: true
+						},
+						value: "confirm",
+						action_id: "confirm-add-admin"
+					}
+				]
+			}
+		]
+	});
+});
+
+app.action("confirm-add-admin", async interaction => {
+	await interaction.ack();
+	let YMBActive = getYMBActive();
+	const userId = interaction.body.user.id;
+	const givenInfo = interaction.body.state.values;
+	console.log(givenInfo);
+	const added = givenInfo[Object.keys(givenInfo)[0]]["ignore-add-admin"].selected_user;
+	const warn = msg => interaction.client.chat.postEphemeral({
+		channel: YMBActiveChannelId,
+		user: userId,
+		text: msg,
+		blocks: [
+			{
+				type: "section",
+				text: {
+					type: "mrkdwn",
+					text: msg
+				},
+				accessory: {
+					type: "button",
+					text: {
+						type: "plain_text",
+						text: "Close"
+					},
+					action_id: "cancel"
+				}
+			}
+		],
+	});
+
+	if (added === null) return await warn("Choose someone to make admin!");
+	if (YMBActive.admins.includes(added)) return await warn("<@" + added + "> is already an admin!");
+
+	YMBActive.admins.push(added);
+	await interaction.respond("You have made <@" + added + "> an admin.");
+	await app.client.chat.postMessage({
+		channel: YMBActiveChannelId,
+		text: "<@" + added + "> was made an admin by <@" + userId + ">"
+	});
+	saveState(YMBActive);
+});
 
 app.action("remove-admin", async ({ ack }) => await interaction.ack());
 
