@@ -53,7 +53,7 @@ app.command("/ymbactive-join-channel", async ({ ack, body: { user_id }, respond 
 	});
 	YMBActive.score[user_id] = 0;
 	YMBActive.cyclesSinceKicked[user_id] = 1000;
-	YMBActive.update[user_id] = 1;
+	YMBActive.updates[user_id] = 1;
 	saveState(YMBActive);
 });
 
@@ -81,7 +81,6 @@ const scheduleChain = async interval => {
 		if (isChainRunning) scheduleChain(interval);
 		else return await app.client.chat.postMessage({
 			channel: YMBActiveChannelId,
-			user: lraj23UserId,
 			text: "The next interval message was canceled..."
 		});
 		let YMBActive = getYMBActive();
@@ -89,7 +88,6 @@ const scheduleChain = async interval => {
 		console.log(Object.entries(YMBActive.score).sort((a, b) => a[1] - b[1])[0]);
 		await app.client.chat.postMessage({
 			channel: YMBActiveChannelId,
-			user: lraj23UserId,
 			text: "The person who FELL off this time is <@" + leastScore[0] + ">, who has a score of a measly " + leastScore[1] + "."
 		});
 		try {
@@ -102,11 +100,14 @@ const scheduleChain = async interval => {
 			if (e.data.error === "cant_kick_self")
 				await app.client.chat.postMessage({
 					channel: YMBActiveChannelId,
-					user: lraj23UserId,
-					text: "Since <@" + lraj23UserId + "> was the least active this time, but since he can't be kicked out (he runs the channel), he's going to get punished differently. Everyone boo him with @ mentions! Spam this channel with being annoyed at him! Ping him repeatedly!"
+					text: "Since <@" + lraj23UserId + "> was the least active this time, but he can't be kicked out (he runs the channel), he's going to get punished differently. Everyone boo him with @ mentions! Spam this channel with being annoyed at him! Ping him repeatedly!"
 				});
 			else console.error(e.data, e.data.error);
 		}
+		await app.client.chat.postMessage({
+			channel: leastScore[0],
+			text: "You were the least active person this time, with a score of only " + leastScore[1] + ". You'll have to wait for until someone else gets kicked out to rejoin. After that, you can rejoin anytime with /ymbactive-join-channel. Hopefully, you won't FALL off next time!"
+		});
 		console.log(leastScore[1], YMBActive.score[leastScore[0]]);
 		Object.keys(YMBActive.score).forEach(user => {
 			YMBActive.score[user] = 0;
@@ -117,7 +118,6 @@ const scheduleChain = async interval => {
 		YMBActive.cyclesSinceKicked[leastScore[0]] = 0;
 		await app.client.chat.postMessage({
 			channel: YMBActiveChannelId,
-			user: lraj23UserId,
 			text: "Everyone's score has been reset to 0. Make sure not to FALL off next!"
 		});
 		console.log(YMBActive.score);
