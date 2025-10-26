@@ -305,6 +305,8 @@ app.action("confirm-edit-remind", async interaction => {
 
 app.command("/ymbactive-leaderboard", async ({ ack, respond }) => [await ack(), await respond("This is the <#" + YMBActiveChannelId + "> Leaderboard!\n\n" + Object.entries(getYMBActive().score).sort((a, b) => b[1] - a[1]).map(user => "<@" + user[0] + "> has " + user[1] + " score!").join("\n"))]);
 
+app.command("/ymbactive-help", async interaction => [await interaction.ack(), await interaction.respond("This is the You-must-be-active Channel Manager! The point of this is to run the channel <#" + YMBActiveChannelId + "> (you-must-be-active), primarily to kick out inactive people periodically. Gain score by sending messages to avoid getting kicked out. Since this runs in a private channel, you can't just join it like that. In order to join, run /ymbactive-join-channel. You will also get more information from <@" + lraj23UserId + "> once you join.\nFor more information, check out the readme at https://github.com/lraj23/you-must-be-active"), interaction.payload.user_id === lraj23UserId ? await interaction.respond("Test but only for <@" + lraj23UserId + ">. If you aren't him and you see this message, DM him IMMEDIATELY about this!") : null]);
+
 app.message(/secret button/i, async ({ message: { channel, user, thread_ts, ts } }) => await app.client.chat.postEphemeral({
 	channel, user,
 	blocks: [
