@@ -126,57 +126,52 @@ const scheduleChain = async interval => {
 	}, 1000 * 60 * interval));
 };
 
-app.command("/ymbactive-start-chain", async ({ ack, body: { user_id }, respond }) => {
-	await ack();
-	if (user_id !== lraj23UserId) return await respond("You aren't permitted to start the chain. Only <@" + lraj23UserId + "> can!");
-	if (isChainRunning) return await respond("The chain is already running!");
-	await respond({
-		blocks: [
-			{
-				type: "input",
-				element: {
-					type: "plain_text_input",
-					action_id: "ignore-interval-length",
-					placeholder: {
-						type: "plain_text",
-						text: "In minutes"
-					}
-				},
-				label: {
+app.action("start-chain", async ({ ack, respond }) => [await ack(), await respond({
+	text: "Enter the chain interval (min)",
+	blocks: [
+		{
+			type: "input",
+			element: {
+				type: "plain_text_input",
+				action_id: "ignore-interval-length",
+				placeholder: {
 					type: "plain_text",
-					text: "Interval (in minutes)",
-					emoji: true
+					text: "In minutes"
 				}
 			},
-			{
-				type: "actions",
-				elements: [
-					{
-						type: "button",
-						text: {
-							type: "plain_text",
-							text: ":x: Cancel",
-							emoji: true
-						},
-						value: "cancel",
-						action_id: "cancel"
-					},
-					{
-						type: "button",
-						text: {
-							type: "plain_text",
-							text: ":white_check_mark: Go!",
-							emoji: true
-						},
-						value: "confirm",
-						action_id: "confirm"
-					}
-				]
+			label: {
+				type: "plain_text",
+				text: "Interval (in minutes)",
+				emoji: true
 			}
-		],
-		text: "Enter the chain interval (min)"
-	});
-});
+		},
+		{
+			type: "actions",
+			elements: [
+				{
+					type: "button",
+					text: {
+						type: "plain_text",
+						text: ":x: Cancel",
+						emoji: true
+					},
+					value: "cancel",
+					action_id: "cancel"
+				},
+				{
+					type: "button",
+					text: {
+						type: "plain_text",
+						text: ":white_check_mark: Go!",
+						emoji: true
+					},
+					value: "confirm",
+					action_id: "confirm"
+				}
+			]
+		}
+	]
+})]);
 
 app.action(/^ignore-.+$/, async ({ ack }) => await ack());
 
@@ -191,13 +186,66 @@ app.action("confirm", async ({ ack, respond, body: { state: { values } } }) => {
 	await respond("The chain has started!");
 });
 
-app.command("/ymbactive-stop-chain", async ({ ack, body: { user_id }, respond }) => {
+app.action("stop-chain", async ({ ack, respond }) => [await ack(), isChainRunning = false, await respond("The chain has stopped!")]);
+
+app.command("/ymbactive-admin", async ({ ack, body: { user_id }, respond }) => {
 	await ack();
-	if (user_id !== lraj23UserId) return await respond("You aren't permitted to stop the chain. Only <@" + lraj23UserId + "> can!");
-	if (!isChainRunning) return await respond("The chain isn't running!");
-	isChainRunning = false;
-	await respond("The chain has stopped!");
+	let YMBActive = getYMBActive();
+	if (!YMBActive.admins.includes(user_id)) return await respond("You aren't an admin (" + YMBActive.admins.map(admin => "<@" + admin + ">").join(", ") + "), so you can't access this command.");
+	await respond({
+		text: "Admin panel:",
+		blocks: [
+			{
+				type: "section",
+				text: {
+					type: "mrkdwn",
+					text: "Admin Panel:"
+				}
+			},
+			{
+				type: "actions",
+				elements: [
+					{
+						type: "button",
+						text: {
+							type: "plain_text",
+							text: (isChainRunning ? ":chains: Stop Chain" : ":chains: Start Chain")
+						},
+						action_id: (isChainRunning ? "stop-chain" : "start-chain")
+					},
+					{
+						type: "button",
+						text: {
+							type: "plain_text",
+							text: ":heavy_plus_sign: Add admin"
+						},
+						action_id: "add-admin"
+					},
+					{
+						type: "button",
+						text: {
+							type: "plain_text",
+							text: ":adminabooz: Remove admin"
+						},
+						action_id: "remove-admin"
+					},
+					{
+						type: "button",
+						text: {
+							type: "plain_text",
+							text: ":x: Cancel"
+						},
+						action_id: "cancel"
+					}
+				]
+			}
+		]
+	});
 });
+
+app.action("add-admin", async ({ ack }) => await interaction.ack());
+
+app.action("remove-admin", async ({ ack }) => await interaction.ack());
 
 app.command("/ymbactive-edit-remind", async ({ ack, payload: { user_id }, respond }) => {
 	await ack();
@@ -273,30 +321,29 @@ app.command("/ymbactive-edit-remind", async ({ ack, payload: { user_id }, respon
 	});
 });
 
-app.action("confirm-edit-remind", async interaction => {
-	await interaction.ack();
+app.action("confirm-edit-remind", async ({ ack, body: { user: { id }, state: { values } }, respond }) => {
+	await ack();
 	let YMBActive = getYMBActive();
-	const userId = interaction.body.user.id;
-	console.log(interaction.body.state.values);
-	let remind = interaction.body.state.values[Object.keys(interaction.body.state.values)[0]]["ignore-remind-interval"].selected_option.value || "never";
+	console.log(values);
+	let remind = values[Object.keys(values)[0]]["ignore-remind-interval"].selected_option.value || "never";
 	console.log(remind);
 
 	switch (remind) {
 		case "none":
-			await interaction.respond("<@" + userId + "> set their updates to never. The bot will no longer update you with your score. If you want to check your score, run /ymbactive-leaderboard to make sure you aren't about to FALL off.");
-			YMBActive.updates[userId] = 0;
+			await respond("<@" + id + "> set their updates to never. The bot will no longer update you with your score. If you want to check your score, run /ymbactive-leaderboard to make sure you aren't about to FALL off.");
+			YMBActive.updates[id] = 0;
 			break;
 		case "thousand":
-			await interaction.respond("<@" + userId + "> set their updates to every thousand. Every time you send a message that brings your score into a different thousand, you will get a notice. I'd still suggest running /ymbactive-leaderboard to make sure you don't FALL off next!");
-			YMBActive.updates[userId] = 1000;
+			await respond("<@" + id + "> set their updates to every thousand. Every time you send a message that brings your score into a different thousand, you will get a notice. I'd still suggest running /ymbactive-leaderboard to make sure you don't FALL off next!");
+			YMBActive.updates[id] = 1000;
 			break;
 		case "hundred":
-			await interaction.respond("<@" + userId + "> set their updates to every hundred. Every time you send a message that brings your score into a different hundred, you will get a notice. I'd still suggest running /ymbactive-leaderboard to make sure you don't FALL off next!");
-			YMBActive.updates[userId] = 100;
+			await respond("<@" + id + "> set their updates to every hundred. Every time you send a message that brings your score into a different hundred, you will get a notice. I'd still suggest running /ymbactive-leaderboard to make sure you don't FALL off next!");
+			YMBActive.updates[id] = 100;
 			break;
 		case "always":
-			await interaction.respond("<@" + userId + "> set their updates to every message. Every _single_ time you send a message (in this channel), the bot will give you a notice of your score change. Run /ymbactive-leaderboard sometimes, though, just to ensure you aren't FALLing off next.");
-			YMBActive.updates[userId] = 1;
+			await respond("<@" + id + "> set their updates to every message. Every _single_ time you send a message (in this channel), the bot will give you a notice of your score change. Run /ymbactive-leaderboard sometimes, though, just to ensure you aren't FALLing off next.");
+			YMBActive.updates[id] = 1;
 			break;
 	}
 
@@ -305,10 +352,12 @@ app.action("confirm-edit-remind", async interaction => {
 
 app.command("/ymbactive-leaderboard", async ({ ack, respond }) => [await ack(), await respond("This is the <#" + YMBActiveChannelId + "> Leaderboard!\n\n" + Object.entries(getYMBActive().score).sort((a, b) => b[1] - a[1]).map(user => "<@" + user[0] + "> has " + user[1] + " score!").join("\n"))]);
 
-app.command("/ymbactive-help", async interaction => [await interaction.ack(), await interaction.respond("This is the You-must-be-active Channel Manager! The point of this is to run the channel <#" + YMBActiveChannelId + "> (you-must-be-active), primarily to kick out inactive people periodically. Gain score by sending messages to avoid getting kicked out. Since this runs in a private channel, you can't just join it like that. In order to join, run /ymbactive-join-channel. You will also get more information from <@" + lraj23UserId + "> once you join.\nFor more information, check out the readme at https://github.com/lraj23/you-must-be-active"), interaction.payload.user_id === lraj23UserId ? await interaction.respond("Test but only for <@" + lraj23UserId + ">. If you aren't him and you see this message, DM him IMMEDIATELY about this!") : null]);
+app.command("/ymbactive-help", async ({ ack, respond, payload: { user_id } }) => [await ack(), await respond("This is the You-must-be-active Channel Manager! The point of this is to run the channel <#" + YMBActiveChannelId + "> (you-must-be-active), primarily to kick out inactive people periodically. Gain score by sending messages to avoid getting kicked out. Since this runs in a private channel, you can't just join it like that. In order to join, run /ymbactive-join-channel. You will also get more information from <@" + lraj23UserId + "> once you join.\nFor more information, check out the readme at https://github.com/lraj23/you-must-be-active"), user_id === lraj23UserId ? await respond("Test but only for <@" + lraj23UserId + ">. If you aren't him and you see this message, DM him IMMEDIATELY about this!") : null]);
 
 app.message(/secret button/i, async ({ message: { channel, user, thread_ts, ts } }) => await app.client.chat.postEphemeral({
 	channel, user,
+	text: "<@" + user + "> mentioned the secret button! Here it is:",
+	thread_ts: ((thread_ts == ts) ? undefined : thread_ts),
 	blocks: [
 		{
 			type: "section",
@@ -330,14 +379,14 @@ app.message(/secret button/i, async ({ message: { channel, user, thread_ts, ts }
 				}
 			]
 		}
-	],
-	text: "<@" + user + "> mentioned the secret button! Here it is:",
-	thread_ts: ((thread_ts == ts) ? undefined : thread_ts)
+	]
 }));
 
 app.action("button_click", async ({ body: { channel: { id: cId }, user: { id: uId }, container: { thread_ts } }, ack }) => [await ack(), await app.client.chat.postEphemeral({
 	channel: cId,
 	user: uId,
+	text: "You found the secret button. Here it is again.",
+	thread_ts,
 	blocks: [
 		{
 			type: "section",
@@ -359,7 +408,5 @@ app.action("button_click", async ({ body: { channel: { id: cId }, user: { id: uI
 				}
 			]
 		}
-	],
-	text: "You found the secret button. Here it is again.",
-	thread_ts
+	]
 })]);
