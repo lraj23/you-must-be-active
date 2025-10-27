@@ -76,10 +76,9 @@ app.command("/ymbactive-join-testing", async ({ ack, body: { user_id } }) => {
 });
 
 let isChainRunning = false;
-const scheduleChain = async interval => {
+const scheduleChain = async (interval, delay) => {
 	await new Promise(resolve => setTimeout(async _ => {
-		if (isChainRunning) scheduleChain(interval);
-		else return await app.client.chat.postMessage({
+		if (!isChainRunning) return await app.client.chat.postMessage({
 			channel: YMBActiveChannelId,
 			text: "The next interval message was canceled..."
 		});
@@ -121,8 +120,9 @@ const scheduleChain = async interval => {
 		});
 		console.log(YMBActive.score);
 		saveState(YMBActive);
+		scheduleChain(interval);
 		resolve(true);
-	}, 1000 * 60 * interval));
+	}, 1000 * 60 * ((delay === undefined) ? interval : delay)));
 };
 
 app.action("start-chain", async ({ ack, respond }) => [await ack(), await respond({
@@ -141,6 +141,22 @@ app.action("start-chain", async ({ ack, respond }) => [await ack(), await respon
 			label: {
 				type: "plain_text",
 				text: "Interval (in minutes)",
+				emoji: true
+			}
+		},
+		{
+			type: "input",
+			element: {
+				type: "plain_text_input",
+				action_id: "ignore-chain-delay",
+				placeholder: {
+					type: "plain_text",
+					text: "At least 0"
+				}
+			},
+			label: {
+				type: "plain_text",
+				text: "Delay from now (in minutes)",
 				emoji: true
 			}
 		},
@@ -176,12 +192,44 @@ app.action(/^ignore-.+$/, async ({ ack }) => await ack());
 
 app.action("cancel", async ({ ack, respond }) => [await ack(), await respond({ delete_original: true })]);
 
-app.action("confirm", async ({ ack, respond, body: { state: { values } } }) => {
+app.action("confirm", async ({ ack, respond, body: { state: { values }, user: { id } } }) => {
 	await ack();
 	console.log(values);
-	const interval = parseFloat(values[Object.keys(values)[0]]["ignore-interval-length"].value);
+	const interval = parseFloat(Object.entries(values).find(info => info[1]["ignore-interval-length"])[1]["ignore-interval-length"].value);
+	const delay = parseFloat(Object.entries(values).find(info => info[1]["ignore-chain-delay"])[1]["ignore-chain-delay"].value);
+	const warn = async msg => await app.client.chat.postEphemeral({
+		channel: YMBActiveChannelId,
+		user: id,
+		text: msg,
+		blocks: [
+			{
+				type: "section",
+				text: {
+					type: "mrkdwn",
+					text: msg
+				},
+				accessory: {
+					type: "button",
+					text: {
+						type: "plain_text",
+						text: "Close"
+					},
+					action_id: "cancel"
+				}
+			}
+		],
+	});
+
+	if (isNaN(interval)) return await warn("Enter a valid interval!");
+	if (interval <= 0) return await warn("Really? You can't do that!");
+	if (interval < 0.25) return await warn("Sorry, you can't kick people out more often than every 15 seconds.");
+	if (isNaN(delay)) return await warn("Enter a valid delay!");
+	if (delay < 0) return await warn("Really? You can't do that!");
+	if (delay > interval) await warn("I'm confused why you want to delay by this much... But it's still fine!");
+
 	isChainRunning = true;
-	scheduleChain(interval);
+	console.log(interval, delay);
+	scheduleChain(interval, delay);
 	await respond("The chain has started!");
 });
 
@@ -297,7 +345,7 @@ app.action("confirm-add-admin", async ({ ack, body: { user: { id }, state: { val
 	let YMBActive = getYMBActive();
 	console.log(values);
 	const added = values[Object.keys(values)[0]]["ignore-add-admin"].selected_user;
-	const warn = msg => app.client.chat.postEphemeral({
+	const warn = async msg => await app.client.chat.postEphemeral({
 		channel: YMBActiveChannelId,
 		user: id,
 		text: msg,
@@ -387,7 +435,7 @@ app.action("confirm-remove-admin", async ({ ack, body: { user: { id }, state: { 
 	let YMBActive = getYMBActive();
 	console.log(values);
 	const removed = values[Object.keys(values)[0]]["ignore-remove-admin"].selected_user;
-	const warn = msg => app.client.chat.postEphemeral({
+	const warn = async msg => await app.client.chat.postEphemeral({
 		channel: YMBActiveChannelId,
 		user: id,
 		text: msg,
