@@ -90,20 +90,19 @@ const scheduleChain = async interval => {
 			channel: YMBActiveChannelId,
 			text: "The person who FELL off this time is <@" + leastScore[0] + ">, who has a score of a measly " + leastScore[1] + "."
 		});
-		try {
-			await app.client.conversations.kick({
-				token: process.env.YMBACTIVE_USER_TOKEN,
-				channel: YMBActiveChannelId,
-				user: leastScore[0]
-			});
-		} catch (e) {
-			if (e.data.error === "cant_kick_self")
-				await app.client.chat.postMessage({
-					channel: YMBActiveChannelId,
-					text: "Since <@" + lraj23UserId + "> was the least active this time, but he can't be kicked out (he runs the channel), he's going to get punished differently. Everyone boo him with @ mentions! Spam this channel with being annoyed at him! Ping him repeatedly!"
-				});
-			else console.error(e.data, e.data.error);
-		}
+		if (leastScore[0] === lraj23UserId) await app.client.chat.postMessage({
+			channel: YMBActiveChannelId,
+			text: "Since <@" + lraj23UserId + "> was the least active this time, but he can't be kicked out (he's the owner), he's going to get punished differently. Everyone boo him with @ mentions! Spam this channel with being annoyed at him! Ping him repeatedly!"
+		});
+		else if (YMBActive.admins.includes(leastScore[0])) await app.client.chat.postMessage({
+			channel: YMBActiveChannelId,
+			text: "Since <@" + leastScore[0] + "> was the least active this time, but they can't be kicked out (they're an admin), they're going to get punished differently. Everyone boo them with @ mentions! Spam this channel with being annoyed at them! Ping them repeatedly!"
+		});
+		else await app.client.conversations.kick({
+			token: process.env.YMBACTIVE_USER_TOKEN,
+			channel: YMBActiveChannelId,
+			user: leastScore[0]
+		});
 		await app.client.chat.postMessage({
 			channel: leastScore[0],
 			text: "You were the least active person this time, with a score of only " + leastScore[1] + ". You'll have to wait for until someone else gets kicked out to rejoin. After that, you can rejoin anytime with /ymbactive-join-channel. Hopefully, you won't FALL off next time!"
@@ -293,16 +292,14 @@ app.action("add-admin", async ({ ack, respond }) => {
 	});
 });
 
-app.action("confirm-add-admin", async interaction => {
-	await interaction.ack();
+app.action("confirm-add-admin", async ({ ack, body: { user: { id }, state: { values } }, respond }) => {
+	await ack();
 	let YMBActive = getYMBActive();
-	const userId = interaction.body.user.id;
-	const givenInfo = interaction.body.state.values;
-	console.log(givenInfo);
-	const added = givenInfo[Object.keys(givenInfo)[0]]["ignore-add-admin"].selected_user;
-	const warn = msg => interaction.client.chat.postEphemeral({
+	console.log(values);
+	const added = values[Object.keys(values)[0]]["ignore-add-admin"].selected_user;
+	const warn = msg => app.client.chat.postEphemeral({
 		channel: YMBActiveChannelId,
-		user: userId,
+		user: id,
 		text: msg,
 		blocks: [
 			{
@@ -327,15 +324,112 @@ app.action("confirm-add-admin", async interaction => {
 	if (YMBActive.admins.includes(added)) return await warn("<@" + added + "> is already an admin!");
 
 	YMBActive.admins.push(added);
-	await interaction.respond("You have made <@" + added + "> an admin.");
+	await respond("You have made <@" + added + "> an admin.");
 	await app.client.chat.postMessage({
 		channel: YMBActiveChannelId,
-		text: "<@" + added + "> was made an admin by <@" + userId + ">"
+		text: "<@" + added + "> was made an admin by <@" + id + ">"
 	});
 	saveState(YMBActive);
 });
 
-app.action("remove-admin", async ({ ack }) => await interaction.ack());
+app.action("remove-admin", async ({ ack, respond }) => {
+	await ack();
+	await respond({
+		text: "Choose someone to remove from admin:",
+		blocks: [
+			{
+				type: "section",
+				text: {
+					type: "mrkdwn",
+					text: "Choose someone to remove from admin:"
+				},
+				accessory: {
+					type: "users_select",
+					placeholder: {
+						type: "plain_text",
+						text: "Choose someone",
+						emoji: true
+					},
+					action_id: "ignore-remove-admin"
+				}
+			},
+			{
+				type: "actions",
+				elements: [
+					{
+						type: "button",
+						text: {
+							type: "plain_text",
+							text: ":x: Cancel",
+							emoji: true
+						},
+						value: "cancel",
+						action_id: "cancel"
+					},
+					{
+						type: "button",
+						text: {
+							type: "plain_text",
+							text: ":white_check_mark: Go!",
+							emoji: true
+						},
+						value: "confirm",
+						action_id: "confirm-remove-admin"
+					}
+				]
+			}
+		]
+	});
+});
+
+app.action("confirm-remove-admin", async ({ ack, body: { user: { id }, state: { values } }, respond }) => {
+	await ack();
+	let YMBActive = getYMBActive();
+	console.log(values);
+	const removed = values[Object.keys(values)[0]]["ignore-remove-admin"].selected_user;
+	const warn = msg => app.client.chat.postEphemeral({
+		channel: YMBActiveChannelId,
+		user: id,
+		text: msg,
+		blocks: [
+			{
+				type: "section",
+				text: {
+					type: "mrkdwn",
+					text: msg
+				},
+				accessory: {
+					type: "button",
+					text: {
+						type: "plain_text",
+						text: "Close"
+					},
+					action_id: "cancel"
+				}
+			}
+		],
+	});
+
+	if (removed === null) return await warn("Choose someone to remove from admin!");
+	if (!YMBActive.admins.includes(removed)) return await warn("<@" + removed + "> isn't an admin!");
+	if (removed === lraj23UserId) {
+		if (id !== lraj23UserId) YMBActive.admins.splice(YMBActive.admins.indexOf(id), 1);
+		warn("You can't remove <@" + lraj23UserId + "> from admin! Shame on you! For that, you lose your admin!");
+		app.client.chat.postMessage({
+			channel: YMBActiveChannelId,
+			text: "<@" + id + ">, an admin, tried to remove <@" + lraj23UserId + "> from admin! Shame on them!"
+		});
+		return saveState(YMBActive);
+	}
+
+	YMBActive.admins.splice(YMBActive.admins.indexOf(removed), 1);
+	await respond("You have removed <@" + removed + "> from admin.");
+	await app.client.chat.postMessage({
+		channel: YMBActiveChannelId,
+		text: "<@" + removed + "> was removed from admin by <@" + id + ">"
+	});
+	saveState(YMBActive);
+});
 
 app.command("/ymbactive-edit-remind", async ({ ack, payload: { user_id }, respond }) => {
 	await ack();
