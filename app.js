@@ -47,14 +47,16 @@ app.command("/ymbactive-join-channel", async ({ ack, body: { user_id }, respond 
 	} catch (e) {
 		console.error(e.data.error);
 	}
-	if (joined) await app.client.chat.postMessage({
-		channel: YMBActiveChannelId,
-		text: "<@" + user_id + "> has joined <#" + YMBActiveChannelId + ">! Let's see how long it takes for them to FALL off..."
-	});
-	YMBActive.score[user_id] = 0;
-	YMBActive.cyclesSinceKicked[user_id] = 1000;
-	YMBActive.updates[user_id] = 1;
-	saveState(YMBActive);
+	if (joined) {
+		await app.client.chat.postMessage({
+			channel: YMBActiveChannelId,
+			text: "<@" + user_id + "> has joined <#" + YMBActiveChannelId + ">! Let's see how long it takes for them to FALL off..."
+		});
+		YMBActive.score[user_id] = 0;
+		YMBActive.cyclesSinceKicked[user_id] = 1000;
+		YMBActive.updates[user_id] = 1;
+		saveState(YMBActive);
+	}
 });
 
 app.command("/ymbactive-join-testing", async ({ ack, body: { user_id } }) => {
@@ -580,6 +582,93 @@ app.action("confirm-edit-remind", async ({ ack, body: { user: { id }, state: { v
 	}
 
 	saveState(YMBActive);
+});
+
+app.command("/ymbactive-add-others", async ({ ack, respond }) => [await ack(), await respond({
+	text: "List all the people you want to add to <#" + YMBActiveChannelId + "> (you-must-be-active):",
+	blocks: [
+		{
+			type: "input",
+			element: {
+				type: "multi_users_select",
+				action_id: "ignore-add-others",
+				placeholder: {
+					type: "plain_text",
+					text: "At least 1"
+				}
+			},
+			label: {
+				type: "plain_text",
+				text: "List all the people you want to add to <#" + YMBActiveChannelId + "> (you-must-be-active)",
+				emoji: true
+			}
+		},
+		{
+			type: "actions",
+			elements: [
+				{
+					type: "button",
+					text: {
+						type: "plain_text",
+						text: ":x: Cancel",
+						emoji: true
+					},
+					value: "cancel",
+					action_id: "cancel"
+				},
+				{
+					type: "button",
+					text: {
+						type: "plain_text",
+						text: ":white_check_mark: Go!",
+						emoji: true
+					},
+					value: "confirm",
+					action_id: "confirm-add-others"
+				}
+			]
+		}
+	]
+})]);
+
+app.action("confirm-add-others", async ({ ack, body: { user: { id }, state: { values } }, respond }) => {
+	await ack();
+	let YMBActive = getYMBActive();
+	const added = values[Object.keys(values)[0]]["ignore-add-others"].selected_users || [];
+	console.log(added);
+	let response = [];
+	for (let i = 0; i < added.length; i++) {
+		let userId = added[i];
+		if ((YMBActive.cyclesSinceKicked[userId] !== undefined) && (YMBActive.cyclesSinceKicked[userId] < 2)) {
+			response.push("<@" + userId + "> was just kicked from <#" + YMBActiveChannelId + "> (you-must-be-active) only " + YMBActive.cyclesSinceKicked[userId] + " kicks ago! Wait for some time before trying to add them again.");
+			continue;
+		}
+		let joined = false;
+		try {
+			await app.client.conversations.invite({
+				channel: YMBActiveChannelId,
+				users: userId
+			});
+			joined = true;
+		} catch (e) {
+			console.log(e.data.error);
+			if (e.data.error === "already_in_channel") response.push("<@" + userId + "> is already in <#" + YMBActiveChannelId + "> (you-must-be-active), so you can't add them.");
+			else console.error(e.data.error);
+			console.log(response);
+		}
+		if (joined) {
+			await app.client.chat.postMessage({
+				channel: YMBActiveChannelId,
+				text: "<@" + userId + "> has been added to <#" + YMBActiveChannelId + "> by <@" + id + ">! Let's see how long it takes for them to FALL off..."
+			});
+			YMBActive.score[userId] = 0;
+			YMBActive.cyclesSinceKicked[userId] = 1000;
+			YMBActive.updates[userId] = 1;
+		}
+	}
+	saveState(YMBActive);
+	if (response.length === 0) await respond("Success!");
+	else await respond(response.join("\n"));
 });
 
 app.command("/ymbactive-leaderboard", async ({ ack, respond }) => [await ack(), await respond("This is the <#" + YMBActiveChannelId + "> Leaderboard!\n\n" + Object.entries(getYMBActive().score).sort((a, b) => b[1] - a[1]).map(user => "<@" + user[0] + "> has " + user[1] + " score!").join("\n"))]);
