@@ -7,12 +7,12 @@ const YMBActiveChannelId = "C09MT69QZMX";
 app.message("", async ({ message: { user, channel, text, files } }) => {
 	let YMBActive = getYMBActive();
 	if (![YMBActiveChannelId, YMBActiveTestingChannelId].includes(channel)) return;
-	console.log("message in <#" + channel + ">:", text);
+	console.log("message in <#" + channel + "> from <@" + user + ">:", text);
 	const numOfFiles = files?.length || 0;
 	console.log("message length:", text.length);
 	console.log("includes file(s):", numOfFiles);
 	let score = YMBActive.score[user];
-	if (score === undefined) score = 0;
+	if (score === undefined) return;
 	let newScore = score + text.length + 10 * numOfFiles;
 	console.log(Math.floor(score / YMBActive.updates[user]), Math.floor(newScore / YMBActive.updates[user]));
 	if (Math.floor(score / YMBActive.updates[user]) !== Math.floor(newScore / YMBActive.updates[user]))
@@ -89,7 +89,16 @@ const scheduleChain = async (interval, delay) => {
 		console.log(Object.entries(YMBActive.score).sort((a, b) => a[1] - b[1])[0]);
 		await app.client.chat.postMessage({
 			channel: YMBActiveChannelId,
-			text: "The person who FELL off this time is <@" + leastScore[0] + ">, who has a score of a measly " + leastScore[1] + "."
+			text: "The person who FELL off this time is <@" + leastScore[0] + ">, who has a score of a measly " + leastScore[1] + ".",
+			blocks: [
+				{
+					type: "section",
+					text: {
+						type: "mrkdwn",
+						text: "<!channel> The person who FELL off this time is <@" + leastScore[0] + ">, who has a score of a measly " + leastScore[1] + "."
+					}
+				}
+			]
 		});
 		if (leastScore[0] === lraj23UserId) await app.client.chat.postMessage({
 			channel: YMBActiveChannelId,
@@ -99,11 +108,15 @@ const scheduleChain = async (interval, delay) => {
 			channel: YMBActiveChannelId,
 			text: "Since <@" + leastScore[0] + "> was the least active this time, but they can't be kicked out (they're an admin), they're going to get punished differently. Everyone boo them with @ mentions! Spam this channel with being annoyed at them! Ping them repeatedly!"
 		});
-		else await app.client.conversations.kick({
-			token: process.env.YMBACTIVE_USER_TOKEN,
-			channel: YMBActiveChannelId,
-			user: leastScore[0]
-		});
+		else try {
+			await app.client.conversations.kick({
+				token: process.env.YMBACTIVE_USER_TOKEN,
+				channel: YMBActiveChannelId,
+				user: leastScore[0]
+			});
+		} catch (e) {
+			console.error(e.data.error);
+		}
 		await app.client.chat.postMessage({
 			channel: leastScore[0],
 			text: "You were the least active person this time, with a score of only " + leastScore[1] + ". You'll have to wait for until someone else gets kicked out to rejoin. After that, you can rejoin anytime with /ymbactive-join-channel. Hopefully, you won't FALL off next time!"
@@ -111,11 +124,14 @@ const scheduleChain = async (interval, delay) => {
 		console.log(leastScore[1], YMBActive.score[leastScore[0]]);
 		Object.keys(YMBActive.score).forEach(user => {
 			YMBActive.score[user] = 0;
-			if (!YMBActive.cyclesSinceKicked[user]) YMBActive.cyclesSinceKicked[user] = 0;
-			YMBActive.cyclesSinceKicked[user]++;
 		});
-		delete YMBActive.score[leastScore[0]];
-		YMBActive.cyclesSinceKicked[leastScore[0]] = 0;
+		Object.keys(YMBActive.cyclesSinceKicked).forEach(user => {
+			YMBActive.cyclesSinceKicked[user]++;
+		})
+		if (!YMBActive.admins.includes(leastScore[0])) {
+			delete YMBActive.score[leastScore[0]];
+			YMBActive.cyclesSinceKicked[leastScore[0]] = 0;
+		}
 		await app.client.chat.postMessage({
 			channel: YMBActiveChannelId,
 			text: "Everyone's score has been reset to 0. Make sure not to FALL off next!"
