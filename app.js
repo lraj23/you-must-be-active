@@ -3,8 +3,31 @@ import { getYMBActive, saveState } from "./datahandler.js";
 const lraj23UserId = "U0947SL6AKB";
 const YMBActiveTestingChannelId = "C09MUE0M5GA";
 const YMBActiveChannelId = "C09MT69QZMX";
+const gPortfolioDmId = "D09RRFTRXR8";
+const commands = {};
 
-app.message("", async ({ message: { user, channel, text, files } }) => {
+app.message("", async ({ message: { user, channel, text, files, channel_type } }) => {
+	if ((channel_type === "im") && (channel === gPortfolioDmId)) {
+		const info = text.split(";");
+		console.log(info[0], commands[info[0]]);
+		return commands[info[0]]({
+			ack: _ => _,
+			body: {
+				user_id: info[1],
+				channel_id: info[2]
+			},
+			respond: (response) => {
+				if (typeof response === "string") return app.client.chat.postEphemeral({
+					channel: info[2],
+					user: info[1],
+					text: response
+				});
+				if (!response.channel) response.channel = info[2];
+				if (!response.user) response.user = info[1];
+				app.client.chat.postEphemeral(response);
+			}
+		});
+	}
 	let YMBActive = getYMBActive();
 	if (![YMBActiveChannelId, YMBActiveTestingChannelId].includes(channel)) return;
 	console.log("message in <#" + channel + "> from <@" + user + ">:", text);
@@ -31,17 +54,17 @@ app.message("", async ({ message: { user, channel, text, files } }) => {
 	saveState(YMBActive);
 });
 
-app.command("/ymbactive-join-channel", async ({ ack, body: { user_id }, respond }) => {
+commands["join-channel"] = async ({ ack, body: { user_id: user }, respond }) => {
 	await ack();
 	let YMBActive = getYMBActive();
-	if ((YMBActive.cyclesSinceKicked[user_id] !== undefined) && (YMBActive.cyclesSinceKicked[user_id] < 2)) {
-		return await respond("You were just kicked from <#" + YMBActiveChannelId + "> (you-must-be-active) only " + YMBActive.cyclesSinceKicked[user_id] + " kicks ago! Wait for some time before trying to join.");
+	if ((YMBActive.cyclesSinceKicked[user] !== undefined) && (YMBActive.cyclesSinceKicked[user] < 2)) {
+		return await respond("You were just kicked from <#" + YMBActiveChannelId + "> (you-must-be-active) only " + YMBActive.cyclesSinceKicked[user] + " kicks ago! Wait for some time before trying to join.");
 	}
 	let joined = false;
 	try {
 		await app.client.conversations.invite({
 			channel: YMBActiveChannelId,
-			users: user_id
+			users: user
 		});
 		joined = true;
 	} catch (e) {
@@ -50,22 +73,23 @@ app.command("/ymbactive-join-channel", async ({ ack, body: { user_id }, respond 
 	if (joined) {
 		await app.client.chat.postMessage({
 			channel: YMBActiveChannelId,
-			text: "<@" + user_id + "> has joined <#" + YMBActiveChannelId + ">! Let's see how long it takes for them to FALL off..."
+			text: "<@" + user + "> has joined <#" + YMBActiveChannelId + ">! Let's see how long it takes for them to FALL off..."
 		});
-		YMBActive.score[user_id] = 0;
-		YMBActive.cyclesSinceKicked[user_id] = 1000;
-		YMBActive.updates[user_id] = 1;
+		YMBActive.score[user] = 0;
+		YMBActive.cyclesSinceKicked[user] = 1000;
+		YMBActive.updates[user] = 1;
 		saveState(YMBActive);
 	}
-});
+};
+app.command("/ymbactive-join-channel", commands["join-channel"]);
 
-app.command("/ymbactive-join-testing", async ({ ack, body: { user_id } }) => {
+commands["join-testing"] = async ({ ack, body: { user_id: user } }) => {
 	await ack();
 	let joined = false;
 	try {
 		await app.client.conversations.invite({
 			channel: YMBActiveTestingChannelId,
-			users: user_id
+			users: user
 		});
 		joined = true;
 	} catch (e) {
@@ -73,9 +97,10 @@ app.command("/ymbactive-join-testing", async ({ ack, body: { user_id } }) => {
 	}
 	if (joined) await app.client.chat.postMessage({
 		channel: YMBActiveTestingChannelId,
-		text: "<@" + user_id + "> has joined <#" + YMBActiveTestingChannelId + ">! Hopefully they can help <@" + lraj23UserId + "> test..."
+		text: "<@" + user + "> has joined <#" + YMBActiveTestingChannelId + ">! Hopefully they can help <@" + lraj23UserId + "> test..."
 	});
-});
+};
+app.command("/ymbactive-join-testing", commands["join-testing"]);
 
 let isChainRunning = false;
 const scheduleChain = async (interval, delay) => {
@@ -253,10 +278,10 @@ app.action("confirm", async ({ ack, respond, body: { state: { values }, user: { 
 
 app.action("stop-chain", async ({ ack, respond }) => [await ack(), isChainRunning = false, await respond("The chain has stopped!")]);
 
-app.command("/ymbactive-admin", async ({ ack, body: { user_id }, respond }) => {
+commands.admin = async ({ ack, body: { user_id: user, channel_id: channel }, respond }) => {
 	await ack();
 	let YMBActive = getYMBActive();
-	if (!YMBActive.admins.includes(user_id)) return await respond("You aren't an admin (" + YMBActive.admins.map(admin => "<@" + admin + ">").join(", ") + "), so you can't access this command.");
+	if (!YMBActive.admins.includes(user)) return await respond("You aren't an admin (" + YMBActive.admins.map(admin => "<@" + admin + ">").join(", ") + "), so you can't access this command.");
 	await respond({
 		text: "Admin panel:",
 		blocks: [
@@ -306,7 +331,8 @@ app.command("/ymbactive-admin", async ({ ack, body: { user_id }, respond }) => {
 			}
 		]
 	});
-});
+};
+app.command("/ymbactive-admin", commands.admin);
 
 app.action("add-admin", async ({ ack, respond }) => {
 	await ack();
@@ -497,7 +523,7 @@ app.action("confirm-remove-admin", async ({ ack, body: { user: { id }, state: { 
 	saveState(YMBActive);
 });
 
-app.command("/ymbactive-edit-remind", async ({ ack, payload: { user_id }, respond }) => {
+commands["edit-remind"] = async ({ ack, body: { user_id: user, channel_id: channel }, respond }) => {
 	await ack();
 	let YMBActive = getYMBActive();
 	const optInLevels = Object.entries({
@@ -506,7 +532,7 @@ app.command("/ymbactive-edit-remind", async ({ ack, payload: { user_id }, respon
 		hundred: "Every 100",
 		always: "Every message!"
 	});
-	const currentRemind = { "0": "none", "1000": "thousand", "100": "hundred", "1": "always" }[YMBActive.updates[user_id]];
+	const currentRemind = { "0": "none", "1000": "thousand", "100": "hundred", "1": "always" }[YMBActive.updates[user]];
 	await respond({
 		text: "Choose how often you want to get info on your score update",
 		blocks: [
@@ -569,7 +595,8 @@ app.command("/ymbactive-edit-remind", async ({ ack, payload: { user_id }, respon
 			}
 		]
 	});
-});
+};
+app.command("/ymbactive-edit-remind", commands["edit-remind"]);
 
 app.action("confirm-edit-remind", async ({ ack, body: { user: { id }, state: { values } }, respond }) => {
 	await ack();
@@ -600,7 +627,7 @@ app.action("confirm-edit-remind", async ({ ack, body: { user: { id }, state: { v
 	saveState(YMBActive);
 });
 
-app.command("/ymbactive-add-others", async ({ ack, respond }) => [await ack(), await respond({
+commands["add-others"] = async ({ ack, respond }) => [await ack(), await respond({
 	text: "List all the people you want to add to <#" + YMBActiveChannelId + "> (you-must-be-active):",
 	blocks: [
 		{
@@ -645,7 +672,8 @@ app.command("/ymbactive-add-others", async ({ ack, respond }) => [await ack(), a
 			]
 		}
 	]
-})]);
+})];
+app.command("/ymbactive-add-others", commands["add-others"]);
 
 app.action("confirm-add-others", async ({ ack, body: { user: { id }, state: { values } }, respond }) => {
 	await ack();
@@ -687,9 +715,11 @@ app.action("confirm-add-others", async ({ ack, body: { user: { id }, state: { va
 	else await respond(response.join("\n"));
 });
 
-app.command("/ymbactive-leaderboard", async ({ ack, respond }) => [await ack(), await respond("This is the <#" + YMBActiveChannelId + "> Leaderboard!\n\n" + Object.entries(getYMBActive().score).sort((a, b) => b[1] - a[1]).map(user => "<@" + user[0] + "> has " + user[1] + " score!").join("\n"))]);
+commands.leaderboard = async ({ ack, respond }) => [await ack(), await respond("This is the <#" + YMBActiveChannelId + "> Leaderboard!\n\n" + Object.entries(getYMBActive().score).sort((a, b) => b[1] - a[1]).map(user => "<@" + user[0] + "> has " + user[1] + " score!").join("\n"))];
+app.command("/ymbactive-leaderboard", commands.leaderboard);
 
-app.command("/ymbactive-help", async ({ ack, respond, payload: { user_id } }) => [await ack(), await respond("This is the You-must-be-active Channel Manager! The point of this is to run the channel <#" + YMBActiveChannelId + "> (you-must-be-active), primarily to kick out inactive people periodically. Gain score by sending messages to avoid getting kicked out. Since this runs in a private channel, you can't just join it like that. In order to join, run /ymbactive-join-channel. You will also get more information from <@" + lraj23UserId + "> once you join.\nFor more information, check out the readme at https://github.com/lraj23/you-must-be-active"), user_id === lraj23UserId ? await respond("Test but only for <@" + lraj23UserId + ">. If you aren't him and you see this message, DM him IMMEDIATELY about this!") : null]);
+commands.help = async ({ ack, body: { user_id: user }, respond }) => [await ack(), await respond("This is the You-must-be-active Channel Manager! The point of this is to run the channel <#" + YMBActiveChannelId + "> (you-must-be-active), primarily to kick out inactive people periodically. Gain score by sending messages to avoid getting kicked out. Since this runs in a private channel, you can't just join it like that. In order to join, run /ymbactive-join-channel. You will also get more information from <@" + lraj23UserId + "> once you join.\nFor more information, check out the readme at https://github.com/lraj23/you-must-be-active"), user === lraj23UserId ? await respond("Test but only for <@" + lraj23UserId + ">. If you aren't him and you see this message, DM him IMMEDIATELY about this!") : null];
+app.command("/ymbactive-help", commands.help);
 
 app.message(/secret button/i, async ({ message: { channel, user, thread_ts, ts } }) => await app.client.chat.postEphemeral({
 	channel, user,
